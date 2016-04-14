@@ -2,7 +2,7 @@ package Dancer2::Plugin::Auth::ActiveDirectory;
 
 =head1 NAME
 
-Dancer2::Plugin::Auth::ActiveDirectory - Abstract config class.
+Dancer2::Plugin::Auth::ActiveDirectory - Authentication module for MS ActiveDirectory
 
 =head1 VERSION
 
@@ -27,20 +27,19 @@ use Net::LDAP::Constant qw[LDAP_INVALID_CREDENTIALS];
 
 sub _authenticate {
     my ( $dsl, $s_username, $s_auth_password ) = @_;
-    my $hr_stg        = plugin_setting();
-    my $s_principal   = $hr_stg->{principal};
-    my $s_domain      = $hr_stg->{domain};
+    my $hr_stg = plugin_setting();
     my $or_connection = Net::LDAP->new( $hr_stg->{host}, port => 389, timeout => 60 );
     unless ( defined $or_connection ) {
         my $host = $hr_stg->{host};
         $dsl->error(qq/Failed to connect to '$host'. Reason: '$@'/);
         return undef;
     }
-    my $s_user = sprintf( '%s@%s', $s_username, $s_principal );
-    my $message = $or_connection->bind( $s_user, password => $s_auth_password );
+    my $s_principal = $hr_stg->{principal};
+    my $s_user      = sprintf( '%s@%s', $s_username, $s_principal );
+    my $message     = $or_connection->bind( $s_user, password => $s_auth_password );
     return undef if ( $dsl->_v_is_error( $message, $s_user ) );
-    $dsl->debug(qq/Successfully authenticated user '$s_user'./);
-    my $result = $or_connection->search(    # perform a search
+    my $s_domain = $hr_stg->{domain};
+    my $result   = $or_connection->search(    # perform a search
         base   => qq/dc=$s_principal,dc=$s_domain/,
         filter => qq/(&(objectClass=person)(userPrincipalName=$s_user.$s_domain))/,
     );
@@ -55,7 +54,6 @@ sub _authenticate {
             surname   => $_->get_value(q/sn/),
             groups    => $groups,
             rights    => _rights_by_user( $hr_stg, $groups ),
-            password  => $s_auth_password,
             user      => $s_user,
         };
     }
@@ -75,9 +73,7 @@ sub _has_right {
 
 sub _list_users {
     my ( $dsl, $o_session_user, $search_string ) = @_;
-    my $hr_stg        = plugin_setting();
-    my $s_principal   = $hr_stg->{principal};
-    my $s_domain      = $hr_stg->{domain};
+    my $hr_stg = plugin_setting();
     my $or_connection = Net::LDAP->new( $hr_stg->{host}, port => 389, timeout => 60 );
     unless ( defined $or_connection ) {
         my $host = $hr_stg->{host};
@@ -88,20 +84,14 @@ sub _list_users {
     my $message = $or_connection->bind( $s_user, password => $o_session_user->{password} );
 
     return undef if ( $dsl->_v_is_error( $message, $s_user ) );
-    $dsl->debug(qq/Successfully authenticated user '$s_user'./);
-
-    my $result = $or_connection->search(    # perform a search
+    my $s_principal = $hr_stg->{principal};
+    my $s_domain    = $hr_stg->{domain};
+    my $result      = $or_connection->search(
         base   => qq/dc=$s_principal,dc=$s_domain/,
         filter => qq/(&(objectClass=person)(name=$search_string*))/,
     );
     my $return_names = [];
-    push(
-        @$return_names,
-        {
-            name => $_->get_value(q/name/),
-            uid  => $_->get_value(q/sAMAccountName/),
-        }
-    ) foreach ( $result->entries );
+    push( @$return_names, { name => $_->get_value(q/name/), uid => $_->get_value(q/sAMAccountName/), } ) foreach ( $result->entries );
     return $return_names;
 }
 
@@ -134,11 +124,35 @@ sub _rights_by_user {
 
 =head1 SYNOPSIS
 
-=head1 OPTIONS
+Configuration:
+
+    plugins:
+      Auth::ActiveDirectory:
+        host: 0.0.0.0
+        principal: yourprincpal
+        domain: somedomain
+        rights:
+          definedright1: ad-group
+          definedright2: ad-group
+          definedright3: another-ad-group
+          definedright4: another-ad-group
+
+Code:
+
+    post '/login' => sub {
+        session 'user' => authenticate( params->{user}, params->{pass} );
+        return template 'index', { html_error => 'Authentication failed!!' }
+            unless ( session('user') );
+        return template 'index', { html_error => 'No right for this page!!' }
+            if( !has_right( session('user'), 'definedright1') );
+        template 'index', { loggedin => 1 };
+    };
 
 =head1 SUBROUTINES/METHODS
 
 =head2 authenticate
+
+Basicaly the subroutine for authentication in the ActiveDirectory
 
 =cut
 
@@ -146,27 +160,37 @@ register authenticate => \&_authenticate;
 
 =head2 authenticate_config
 
+Subroutine to get configuration for ActiveDirectory
+
 =cut
 
 register authenticate_config => \&_authenticate_config;
 
-=head2 authenticate_config
+=head2 has_right
+
+Check if loged in user has one of the configured rights
 
 =cut
 
 register has_right => \&_has_right;
 
-=head2 authenticate_config
+=head2 list_users
 
 =cut
 
 register list_users => \&_list_users;
 
-=head2 authenticate_config
+=head2 rights
+
+Subroutine to get configurated rights
 
 =cut
 
 register rights => \&_rights;
+
+=head2 for_versions
+
+=cut
 
 register_plugin for_versions => [2];
 
@@ -174,31 +198,30 @@ register_plugin for_versions => [2];
 
 __END__
 
-
 =head1 AUTHOR
 
 Mario Zieschang, C<< <mziescha at cpan.org> >>
 
 =head1 BUGS
 
-Please report any bugs or feature requests to C<bug-module-require-usage at rt.cpan.org>, or through
-the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Module-Require-Usage>.  I will be notified, and then you'll
+Please report any bugs or feature requests to C<bug-Dancer2-Plugin-Auth-ActiveDirectory at rt.cpan.org>, or through
+the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Dancer2-Plugin-Auth-ActiveDirectory>.  I will be notified, and then you'll
 automatically be notified of progress on your bug as I make changes.
 
 
 =head1 MOTIVATION
 
-    If you have a run in programming you don't always notice all packages in this moment.
-    And later when someone will know which packages are used, it's not neccessary to look at all of the packages.
+If you have a run in programming you don't always notice all packages in this moment.
+And later when someone will know which packages are used, it's not neccessary to look at all of the packages.
 
-    Usefull for the Makefile.PL or Build.PL.
+Usefull for the Makefile.PL or Build.PL.
 
 
 =head1 SUPPORT
 
 You can find documentation for this module with the perldoc command.
 
-    perldoc Module::Require::Usage
+    perldoc Dancer2::Plugin::Auth::ActiveDirectory
 
 
 You can also look for information at:
@@ -207,25 +230,23 @@ You can also look for information at:
 
 =item * RT: CPAN's request tracker (report bugs here)
 
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Module-Require-Usage>
+L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Dancer2-Plugin-Auth-ActiveDirectory>
 
 =item * AnnoCPAN: Annotated CPAN documentation
 
-L<http://annocpan.org/dist/Module-Require-Usage>
+L<http://annocpan.org/dist/Dancer2-Plugin-Auth-ActiveDirectory>
 
 =item * CPAN Ratings
 
-L<http://cpanratings.perl.org/d/Module-Require-Usage>
+L<http://cpanratings.perl.org/d/Dancer2-Plugin-Auth-ActiveDirectory>
 
 =item * Search CPAN
 
-L<http://search.cpan.org/dist/Module-Require-Usage/>
+L<http://search.cpan.org/dist/Dancer2-Plugin-Auth-ActiveDirectory/>
 
 =back
 
-
 =head1 ACKNOWLEDGEMENTS
-
 
 =head1 LICENSE AND COPYRIGHT
 
@@ -266,6 +287,5 @@ YOUR LOCAL LAW. UNLESS REQUIRED BY LAW, NO COPYRIGHT HOLDER OR
 CONTRIBUTOR WILL BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, OR
 CONSEQUENTIAL DAMAGES ARISING IN ANY WAY OUT OF THE USE OF THE PACKAGE,
 EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 
 =cut
