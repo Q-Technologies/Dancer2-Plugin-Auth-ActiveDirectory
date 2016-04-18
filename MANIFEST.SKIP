@@ -1,0 +1,7 @@
+MANIFEST.SKIP
+.gitignore
+Makefile.old
+dist/*
+.git/*
+.travis.yml
+cover_db/*

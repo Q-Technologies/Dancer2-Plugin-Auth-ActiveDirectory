@@ -35,6 +35,6 @@ WriteMakefile(
             },
         }
     },
-    dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
-    clean => { FILES    => 'Dancer2-Plugin-Auth-ActiveDirectory-*' },
+    dist  => { COMPRESS => 'gzip -9f',                                SUFFIX => 'gz', },
+    clean => { FILES    => [ 'Dancer2-Plugin-Auth-ActiveDirectory-*', 'cover_db' ] },
 );
