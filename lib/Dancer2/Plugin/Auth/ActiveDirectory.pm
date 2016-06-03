@@ -15,7 +15,6 @@ our $VERSION = '0.01';
 use 5.10.0;
 use strict;
 use warnings FATAL => 'all';
-use Dancer2;
 use Dancer2::Plugin;
 use Net::LDAP qw[];
 use Net::LDAP::Constant qw[LDAP_INVALID_CREDENTIALS];
