@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Test::More;
 
-unless ( $ENV{RELEASE_TESTING} ) {
+unless ( $ENV{POD_COVERAGE_TESTING} ) {
     plan( skip_all => "Author tests not required for installation" );
 }
 

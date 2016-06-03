@@ -6,11 +6,11 @@ Dancer2::Plugin::Auth::ActiveDirectory - Authentication module for MS ActiveDire
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use 5.10.0;
 use strict;

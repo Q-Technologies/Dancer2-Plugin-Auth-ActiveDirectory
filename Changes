@@ -1,5 +1,15 @@
 Revision history for Dancer2-Plugin-Auth-ActiveDirectory
 
-0.01    Date/time
-        First version, released on an unsuspecting world.
+#========================================================================
+# Version 0.01  Date: 2016/04/21 (Mario Zieschang)
+#========================================================================
 
+* First version, released on an unsuspecting world.
+
+#========================================================================
+# Version 0.02  Date: 2016/06/03 (Mario Zieschang)
+#========================================================================
+
+* Bugfix 
+    - using Dancer2 within the plugin isn't working since Dancer2 0.2
+  (special thanks to SysPete)
