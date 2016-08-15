@@ -6,11 +6,11 @@ Dancer2::Plugin::Auth::ActiveDirectory - Authentication module for MS ActiveDire
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 use 5.10.0;
 use strict;
@@ -18,6 +18,21 @@ use warnings FATAL => 'all';
 use Dancer2::Plugin;
 use Net::LDAP qw[];
 use Net::LDAP::Constant qw[LDAP_INVALID_CREDENTIALS];
+my $ErrorCodes = {
+    '525' => { error => 'user not found' },
+    '52e' => { error => 'invalid credentials' },
+    '530' => { error => 'not permitted to logon at this time' },
+    '531' => { error => 'not permitted to logon at this workstation' },
+    '532' => { error => 'password expired' },
+    '533' => { error => 'data 533' },
+    '701' => { error => 'account expired' },
+    '773' => { error => 'user must reset password' },
+    '775' => { error => 'user account locked' },
+    '534' => {
+        error       => 'account disabled',
+        description => 'The user has not been granted the requested logon type at this machine'
+    },
+};
 
 # -----------------------------------------------
 # Preloaded methods go here.
@@ -36,7 +51,7 @@ sub _authenticate {
     my $s_principal = $hr_stg->{principal};
     my $s_user      = sprintf( '%s@%s', $s_username, $s_principal );
     my $message     = $or_connection->bind( $s_user, password => $s_auth_password );
-    return undef if ( $dsl->_v_is_error( $message, $s_user ) );
+    return _parse_error_message($message) if ( $dsl->_v_is_error( $message, $s_user ) );
     my $s_domain = $hr_stg->{domain};
     my $result   = $or_connection->search(    # perform a search
         base   => qq/dc=$s_principal,dc=$s_domain/,
@@ -119,6 +134,12 @@ sub _rights_by_user {
         $ret_rights->{$_} = 1 if ( grep( /$s_ad_group/, @{$a_user_groups} ) );
     }
     return $ret_rights;
+}
+
+sub _parse_error_message {
+    my ($message)   = @_;
+    my ($errorcode) = $message->{errorMessage} =~ m/(?:data\s(.*)),/;
+    return $ErrorCodes->{$errorcode};
 }
 
 =head1 SYNOPSIS
