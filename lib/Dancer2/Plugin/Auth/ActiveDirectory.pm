@@ -16,130 +16,65 @@ use 5.10.0;
 use strict;
 use warnings FATAL => 'all';
 use Dancer2::Plugin;
-use Net::LDAP qw[];
-use Net::LDAP::Constant qw[LDAP_INVALID_CREDENTIALS];
-my $ErrorCodes = {
-    '525' => { error => 'user not found' },
-    '52e' => { error => 'invalid credentials' },
-    '530' => { error => 'not permitted to logon at this time' },
-    '531' => { error => 'not permitted to logon at this workstation' },
-    '532' => { error => 'password expired' },
-    '533' => { error => 'data 533' },
-    '701' => { error => 'account expired' },
-    '773' => { error => 'user must reset password' },
-    '775' => { error => 'user account locked' },
-    '534' => {
-        error       => 'account disabled',
-        description => 'The user has not been granted the requested logon type at this machine'
-    },
-};
+use Auth::ActiveDirectory;
 
 # -----------------------------------------------
 # Preloaded methods go here.
 # -----------------------------------------------
 # Encapsulated class data.
+my $_settings = undef;
 
-sub _authenticate {
-    my ( $dsl, $s_username, $s_auth_password ) = @_;
-    my $hr_stg = plugin_setting();
-    my $or_connection = Net::LDAP->new( $hr_stg->{host}, port => 389, timeout => 60 );
-    unless ( defined $or_connection ) {
-        my $host = $hr_stg->{host};
-        $dsl->error(qq/Failed to connect to '$host'. Reason: '$@'/);
-        return undef;
+{
+    sub _load_settings() {
+        return $_settings if $_settings;
+        $_settings = plugin_setting;
+        return $_settings;
     }
-    my $s_principal = $hr_stg->{principal};
-    my $s_user      = sprintf( '%s@%s', $s_username, $s_principal );
-    my $message     = $or_connection->bind( $s_user, password => $s_auth_password );
-    return _parse_error_message($message) if ( $dsl->_v_is_error( $message, $s_user ) );
-    my $s_domain = $hr_stg->{domain};
-    my $result   = $or_connection->search(    # perform a search
-        base   => qq/dc=$s_principal,dc=$s_domain/,
-        filter => qq/(&(objectClass=person)(userPrincipalName=$s_user.$s_domain))/,
-    );
-    foreach ( $result->entries ) {
-        my $groups = [];
-        foreach my $group ( $_->get_value(q/memberOf/) ) {
-            push( @$groups, $1 ) if ( $group =~ m/^CN=(.*),OU=.*$/ );
-        }
+
+    sub _rights { return _load_settings->{rights} }
+
+    sub _connect_to_ad {
+        my $stg = _load_settings;
+        return Auth::ActiveDirectory->new( host => $stg->{host}, domain => $stg->{domain}, principal => $stg->{principal} );
+    }
+
+    sub _authenticate {
+        my ( $dsl, $username, $password ) = @_;
+        my $user = _connect_to_ad()->authenticate( $username, $password );
+        return $user if $user->{error};
+        my $groups = [ map { $_->name } @{ $user->groups } ];
         return {
-            uid       => $s_username,
-            firstname => $_->get_value(q/givenName/),
-            surname   => $_->get_value(q/sn/),
-            groups    => $groups,
-            rights    => _rights_by_user( $hr_stg, $groups ),
-            user      => $s_user,
+            uid          => $user->uid,
+            firstname    => $user->firstname,
+            surname      => $user->surname,
+            mail         => $user->mail,
+            display_name => $user->display_name,
+            user         => $user->user,
+            groups       => $groups,
+            rights       => _rights_by_user($groups),
         };
     }
-    return undef;
-}
 
-sub _authenticate_config {
-    return plugin_setting();
-}
-
-sub _has_right {
-    my ( $dsl, $o_session_user, $s_right_name ) = @_;
-    my $hr_rights  = plugin_setting()->{rights};
-    my $s_ad_group = $hr_rights->{$s_right_name};
-    return grep( /$s_ad_group/, @{ $o_session_user->{groups} } );
-}
-
-sub _list_users {
-    my ( $dsl, $o_session_user, $search_string ) = @_;
-    my $hr_stg = plugin_setting();
-    my $or_connection = Net::LDAP->new( $hr_stg->{host}, port => 389, timeout => 60 );
-    unless ( defined $or_connection ) {
-        my $host = $hr_stg->{host};
-        $dsl->error(qq/Failed to connect to '$host'. Reason: '$@'/);
-        return undef;
+    sub _has_right {
+        my ( $dsl, $session_user, $right_name ) = @_;
+        my $group = _rights->{$right_name};
+        return grep( /$group/, @{ $session_user->{groups} } );
     }
-    my $s_user = $o_session_user->{user};
-    my $message = $or_connection->bind( $s_user, password => $o_session_user->{password} );
 
-    return undef if ( $dsl->_v_is_error( $message, $s_user ) );
-    my $s_principal = $hr_stg->{principal};
-    my $s_domain    = $hr_stg->{domain};
-    my $result      = $or_connection->search(
-        base   => qq/dc=$s_principal,dc=$s_domain/,
-        filter => qq/(&(objectClass=person)(name=$search_string*))/,
-    );
-    my $return_names = [];
-    push( @$return_names, { name => $_->get_value(q/name/), uid => $_->get_value(q/sAMAccountName/), } ) foreach ( $result->entries );
-    return $return_names;
-}
-
-sub _v_is_error {
-    my ( $dsl, $message, $s_user ) = @_;
-    if ( $message->is_error ) {
-        my $error = $message->error;
-        my $level = $message->code == LDAP_INVALID_CREDENTIALS ? 'debug' : 'error';
-        $dsl->error(qq/Failed to authenticate user '$s_user'. Reason: '$error'/);
-        return 1;
+    sub _list_users {
+        my ( $dsl, $username, $password, $search_string ) = @_;
+        return _connect_to_ad()->list_users( $username, $password, $search_string );
     }
-    return 0;
-}
 
-sub _rights {
-    return plugin_setting()->{rights};
-}
-
-sub _rights_by_user {
-    my ( $hr_stg, $a_user_groups ) = @_;
-    my $hr_rights = $hr_stg->{rights};
-    return unless $hr_rights;
-    my $ret_rights = {};
-    foreach ( keys %$hr_rights ) {
-        my $s_ad_group = $hr_rights->{$_};
-        $ret_rights->{$_} = 1 if ( grep( /$s_ad_group/, @{$a_user_groups} ) );
+    sub _rights_by_user {
+        my ($groups) = @_;
+        my $stg = _rights || return;
+        my $rights = {};
+        while ( my ( $right, $group ) = each %$stg ) {
+            $rights->{$right} = grep( /$group/, @{$groups} ) ? 1 : ();
+        }
+        return $rights;
     }
-    return $ret_rights;
-}
-
-sub _parse_error_message {
-    my ($message)   = @_;
-    my ($errorcode) = $message->{errorMessage} =~ m/(?:data\s(.*)),/;
-    return $ErrorCodes->{$errorcode};
 }
 
 =head1 SYNOPSIS
@@ -184,7 +119,7 @@ Subroutine to get configuration for ActiveDirectory
 
 =cut
 
-register authenticate_config => \&_authenticate_config;
+register authenticate_config => \&_load_settings;
 
 =head2 has_right
 
@@ -207,6 +142,14 @@ Subroutine to get configurated rights
 =cut
 
 register rights => \&_rights;
+
+=head2 rights_by_user
+
+Subroutine to get configurated rights
+
+=cut
+
+register rights_by_user => \&_rights_by_user;
 
 =head2 for_versions
 
