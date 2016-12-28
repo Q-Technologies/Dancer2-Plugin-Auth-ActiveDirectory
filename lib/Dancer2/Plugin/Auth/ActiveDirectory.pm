@@ -25,13 +25,14 @@ use Auth::ActiveDirectory;
 my $_settings = undef;
 
 {
+
     sub _load_settings() {
         return $_settings if $_settings;
         $_settings = plugin_setting;
         return $_settings;
     }
 
-    sub _rights { return _load_settings->{rights} }
+    sub _rights { return _load_settings->{rights} || {} }
 
     sub _connect_to_ad {
         my $stg = _load_settings;
@@ -57,8 +58,11 @@ my $_settings = undef;
 
     sub _has_right {
         my ( $dsl, $session_user, $right_name ) = @_;
-        my $group = _rights->{$right_name};
-        return grep( /$group/, @{ $session_user->{groups} } );
+        foreach ( @{ [ _rights->{$right_name} ] } ) {
+            next grep( /$_/, @{ $session_user->{groups} } );
+            return 1;
+        }
+        return 0;
     }
 
     sub _list_users {
@@ -68,10 +72,9 @@ my $_settings = undef;
 
     sub _rights_by_user {
         my ($groups) = @_;
-        my $stg = _rights || return;
         my $rights = {};
-        while ( my ( $right, $group ) = each %$stg ) {
-            $rights->{$right} = grep( /$group/, @{$groups} ) ? 1 : ();
+        while ( my ( $right, $group ) = each %{ _rights() } ) {
+            $rights->{$right} = grep( /$_/, @{$groups} ) ? 1 : () foreach ( @{ [$group] } );
         }
         return $rights;
     }

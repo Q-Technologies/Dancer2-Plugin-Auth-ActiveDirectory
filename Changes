@@ -13,3 +13,13 @@ Revision history for Dancer2-Plugin-Auth-ActiveDirectory
 * Bugfix 
     - using Dancer2 within the plugin isn't working since Dancer2 0.2
   (special thanks to SysPete)
+
+
+#========================================================================
+# Version 0.03  Date: 2016/12/28 (Mario Zieschang)
+#========================================================================
+
+* Enhancements
+    - using OOP version Auth::ActiveDirectory
+  (thanks to dsonntag)
+    - using array of groups for the same right

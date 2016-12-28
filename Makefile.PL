@@ -12,7 +12,9 @@ WriteMakefile(
     MIN_PERL_VERSION   => 5.10.0,
     CONFIGURE_REQUIRES => { 'ExtUtils::MakeMaker' => 0, },
     PREREQ_PM          => {
+        'Carp'                  => 0,
         'Dancer2'               => 0,
+        'Net::LDAP'             => 0,
         'Auth::ActiveDirectory' => 0,
     },
     TEST_REQUIRES => {
