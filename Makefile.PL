@@ -23,7 +23,7 @@ WriteMakefile(
         'Test::CheckManifest'     => 0,
         'Test::Pod::Coverage'     => 0,
         'Test::Requires'          => 0,
-        'Test::Spelling'          => 0,
+        'Test::Pod'               => 0,
     },
     META_MERGE => {
         'meta-spec' => { version => 2 },

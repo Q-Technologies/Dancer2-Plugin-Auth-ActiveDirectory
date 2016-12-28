@@ -59,8 +59,7 @@ my $_settings = undef;
     sub _has_right {
         my ( $dsl, $session_user, $right_name ) = @_;
         foreach ( @{ [ _rights->{$right_name} ] } ) {
-            next grep( /$_/, @{ $session_user->{groups} } );
-            return 1;
+            return 1 if grep( /$_/, @{ $session_user->{groups} } );
         }
         return 0;
     }
