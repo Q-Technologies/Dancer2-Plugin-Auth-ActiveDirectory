@@ -2,7 +2,7 @@ package Dancer2::Plugin::Auth::ActiveDirectory;
 
 =head1 NAME
 
-Dancer2::Plugin::Auth::ActiveDirectory - Authentication module for MS ActiveDirectory
+Dancer2::Plugin::Auth::ActiveDirectory - Dancer2 plugin for MS ActiveDirectory
 
 =head1 VERSION
 
@@ -24,7 +24,17 @@ use Auth::ActiveDirectory;
 # Encapsulated class data.
 my $_settings = undef;
 
+=head1 PRIVATE METHODS
+
+=cut 
+
 {
+
+=head2 _load_settings
+ 
+Load plugin settings from environment.
+ 
+=cut
 
     sub _load_settings() {
         return $_settings if $_settings;
@@ -32,50 +42,60 @@ my $_settings = undef;
         return $_settings;
     }
 
-    sub _rights { return _load_settings->{rights} || {} }
+=head2 _in_list
+ 
+Simple list in list comparision sub.
+ 
+=cut
+
+    sub _in_list {
+        !!grep {
+            exists { map { $_ => 1 } @{ $_[1] } }->{$_}
+        } @{ $_[0] };
+    }
+
+=head2 _rights
+ 
+Get defined rights from environment
+ 
+=cut
+
+    sub _rights { _load_settings->{rights} || {} }
+
+=head2 _connect_to_ad
+ 
+Creates a new L<Auth::ActiveDirectory> object including 
+ldap connection to AD server.
+ 
+=cut
 
     sub _connect_to_ad {
         my $stg = _load_settings;
-        return Auth::ActiveDirectory->new( host => $stg->{host}, domain => $stg->{domain}, principal => $stg->{principal} );
+        return Auth::ActiveDirectory->new(
+            host      => $stg->{host},
+            domain    => $stg->{domain},
+            principal => $stg->{principal}
+        );
     }
 
-    sub _authenticate {
-        my ( $dsl, $username, $password ) = @_;
-        my $user = _connect_to_ad()->authenticate( $username, $password );
-        return $user if $user->{error};
-        my $groups = [ map { $_->name } @{ $user->groups } ];
+=head2 _rights_by_user_groups
+ 
+Returns a hashref with the possible rights.
+Based on the AD groups where the user is included.
+ 
+=cut
+
+    sub _rights_by_user_groups {
+        my ( $dsl, $user_groups ) = @_;
+        my $rights = _rights($dsl);
         return {
-            uid          => $user->uid,
-            firstname    => $user->firstname,
-            surname      => $user->surname,
-            mail         => $user->mail,
-            display_name => $user->display_name,
-            user         => $user->user,
-            groups       => $groups,
-            rights       => _rights_by_user($groups),
+            map {
+                _in_list( $user_groups,
+                    ( ref $rights->{$_} ne 'ARRAY' ) ? [ $rights->{$_} ]
+                    : $rights->{$_} ) ? ( $_ => 1 )
+                  : ()
+            } keys %{$rights}
         };
-    }
-
-    sub _has_right {
-        my ( $dsl, $session_user, $right_name ) = @_;
-        foreach ( @{ [ _rights->{$right_name} ] } ) {
-            return 1 if grep( /$_/, @{ $session_user->{groups} } );
-        }
-        return 0;
-    }
-
-    sub _list_users {
-        my ( $dsl, $username, $password, $search_string ) = @_;
-        return _connect_to_ad()->list_users( $username, $password, $search_string );
-    }
-
-    sub _rights_by_user {
-        my ($groups) = @_;
-        my $rights = {};
-        while ( my ( $right, $group ) = each %{ _rights() } ) {
-            $rights->{$right} = grep( /$_/, @{$groups} ) ? 1 : () foreach ( @{ [$group] } );
-        }
-        return $rights;
     }
 }
 
@@ -113,7 +133,22 @@ Basicaly the subroutine for authentication in the ActiveDirectory
 
 =cut
 
-register authenticate => \&_authenticate;
+register authenticate => sub {
+    my $dsl  = shift;
+    my $user = _connect_to_ad($dsl)->authenticate(@_);
+    return $user if $user->{error};
+    my $user_groups = [ map { $_->name } @{ $user->groups } ];
+    return {
+        uid          => $user->uid,
+        firstname    => $user->firstname,
+        surname      => $user->surname,
+        mail         => $user->mail,
+        display_name => $user->display_name,
+        user         => $user->user,
+        groups       => $user_groups,
+        rights       => _rights_by_user_groups( $dsl, $user_groups ),
+    };
+};
 
 =head2 authenticate_config
 
@@ -129,13 +164,15 @@ Check if loged in user has one of the configured rights
 
 =cut
 
-register has_right => \&_has_right;
+register has_right => sub {
+    return $_[1]->{rights}->{ $_[2] } ? 1 : 0;
+};
 
 =head2 list_users
 
 =cut
 
-register list_users => \&_list_users;
+register list_users => sub { _connect_to_ad(shift)->list_users(@_) };
 
 =head2 rights
 
@@ -151,7 +188,7 @@ Subroutine to get configurated rights
 
 =cut
 
-register rights_by_user => \&_rights_by_user;
+register rights_by_user => sub { _rights_by_user_groups( $_[0], $_[1] ) };
 
 =head2 for_versions
 
@@ -176,10 +213,9 @@ automatically be notified of progress on your bug as I make changes.
 
 =head1 MOTIVATION
 
-If you have a run in programming you don't always notice all packages in this moment.
-And later when someone will know which packages are used, it's not neccessary to look at all of the packages.
-
-Usefull for the Makefile.PL or Build.PL.
+I started to write this module for an internal application based on Dancer2.
+The authentication should be from our AD servers ( don't ask... ),
+the result ist this Module and L<Auth::ActiveDirectory>.
 
 
 =head1 SUPPORT
