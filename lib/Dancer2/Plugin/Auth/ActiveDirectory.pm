@@ -49,9 +49,7 @@ Simple list in list comparision sub.
 =cut
 
     sub _in_list {
-        !!grep {
-            exists { map { $_ => 1 } @{ $_[1] } }->{$_}
-        } @{ $_[0] };
+        !!grep { exists { map { $_ => 1 } @{ $_[1] } }->{$_} } @{ $_[0] };
     }
 
 =head2 _rights
@@ -70,12 +68,7 @@ ldap connection to AD server.
 =cut
 
     sub _connect_to_ad {
-        my $stg = _load_settings;
-        return Auth::ActiveDirectory->new(
-            host      => $stg->{host},
-            domain    => $stg->{domain},
-            principal => $stg->{principal}
-        );
+        return Auth::ActiveDirectory->new( @{ [ %{ _load_settings() } ] } );
     }
 
 =head2 _rights_by_user_groups
@@ -88,14 +81,7 @@ Based on the AD groups where the user is included.
     sub _rights_by_user_groups {
         my ( $dsl, $user_groups ) = @_;
         my $rights = _rights($dsl);
-        return {
-            map {
-                _in_list( $user_groups,
-                    ( ref $rights->{$_} ne 'ARRAY' ) ? [ $rights->{$_} ]
-                    : $rights->{$_} ) ? ( $_ => 1 )
-                  : ()
-            } keys %{$rights}
-        };
+        return { map { _in_list( $user_groups, ( ref $rights->{$_} ne 'ARRAY' ) ? [ $rights->{$_} ] : $rights->{$_} ) ? ( $_ => 1 ) : () } keys %{$rights} };
     }
 }
 
@@ -134,8 +120,8 @@ Basicaly the subroutine for authentication in the ActiveDirectory
 =cut
 
 register authenticate => sub {
-    my $dsl  = shift;
-    my $user = _connect_to_ad($dsl)->authenticate(@_);
+    my ( $dsl, $name, $pass ) = @_;
+    my $user = _connect_to_ad($dsl)->authenticate( $name, $pass );
     return $user if $user->{error};
     my $user_groups = [ map { $_->name } @{ $user->groups } ];
     return {

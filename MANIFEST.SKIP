@@ -5,3 +5,5 @@ dist/*
 .git/*
 .travis.yml
 cover_db/*
+Dockerfile
+Dancer2-Plugin-Auth-ActiveDirectory-*
