@@ -49,7 +49,9 @@ Simple list in list comparision sub.
 =cut
 
     sub _in_list {
-        !!grep { exists { map { $_ => 1 } @{ $_[1] } }->{$_} } @{ $_[0] };
+        !!grep {
+            exists { map { $_ => 1 } @{ $_[1] } }->{$_}
+        } @{ $_[0] };
     }
 
 =head2 _rights
@@ -76,6 +78,18 @@ ldap connection to AD server.
 Returns a hashref with the possible rights.
 Based on the AD groups where the user is included.
  
+=cut
+
+    sub _rights_by_user {
+        my ( $dsl, $user ) = @_;
+        return _rights_by_user_groups( $dsl, $user->{groups} );
+    }
+
+=head2 _rights_by_user_groups
+
+Returns a hashref with the possible rights.
+Based on the AD groups where the user is included.
+
 =cut
 
     sub _rights_by_user_groups {
@@ -151,7 +165,7 @@ Check if loged in user has one of the configured rights
 =cut
 
 register has_right => sub {
-    return $_[1]->{rights}->{ $_[2] } ? 1 : 0;
+    return $_[1]->{rights}->{ $_[2] } ? 1:0;
 };
 
 =head2 list_users
@@ -174,7 +188,7 @@ Subroutine to get configurated rights
 
 =cut
 
-register rights_by_user => sub { _rights_by_user_groups( $_[0], $_[1] ) };
+register rights_by_user => sub { _rights_by_user( $_[0], $_[1] ) };
 
 =head2 for_versions
 

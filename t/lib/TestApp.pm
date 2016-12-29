@@ -74,23 +74,45 @@ set plugins => {
         domain    => 'example',
         rights    => {
             check => 'ad_check',
-            test  => 'ad_test',
+            test  => 'dockers',
             git   => [ 'ad_check', 'ad_test' ],
         },
         ldap => $ldap,
     },
 };
+
 set logger => 'capture';
 set log    => 'debug';
+
+set show_errors => 1;
 
 post '/login/:user/:pass' => sub {
     authenticate( route_parameters->get('user'), route_parameters->get('pass') );
     return 1;
 };
 
+post '/list_user/:user/:pass' => sub {
+    return scalar @{ list_users( route_parameters->get('user'), route_parameters->get('pass'), '' ) };
+};
+
 post '/list_user/:user/:pass/:search' => sub {
-    authenticate( route_parameters->get('user'), route_parameters->get('pass'), route_parameters->get('search') );
-    return 1;
+    return scalar @{ list_users( route_parameters->get('user'), route_parameters->get('pass'), route_parameters->get('search') ) };
+};
+
+get '/rights/:right' => sub {
+    to_json rights->{ route_parameters->get('right') };
+};
+
+get '/rights_by_user/:user/:pass' => sub {
+    to_json rights_by_user( authenticate( route_parameters->get('user'), route_parameters->get('pass') ) );
+};
+
+get '/authenticate_config/:key' => sub {
+    to_json { route_parameters->get('key') => authenticate_config->{ route_parameters->get('key') } };
+};
+
+get '/has_right/:user/:pass/:key' => sub {
+    has_right( authenticate( route_parameters->get('user'), route_parameters->get('pass') ), route_parameters->get('key') );
 };
 
 1;

@@ -24,6 +24,10 @@ WriteMakefile(
         'Test::Pod::Coverage'     => 0,
         'Test::Requires'          => 0,
         'Test::Pod'               => 0,
+        'Test::Net::LDAP'         => 0,
+        'Test::Net::LDAP::Mock'   => 0,
+        'HTTP::Request::Common'   => 0,
+        'Plack::Test'             => 0,
     },
     META_MERGE => {
         'meta-spec' => { version => 2 },
