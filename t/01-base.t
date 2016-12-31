@@ -7,11 +7,12 @@ use HTTP::Request::Common qw(GET POST);
 use lib '.';
 
 eval { require Auth::ActiveDirectory };
-if ($@) {
-    plan skip_all => 'Auth::ActiveDirectory required to run these tests';
-}
+plan skip_all => 'Auth::ActiveDirectory required to run these tests' if $@;
 
-use t::lib::TestApp;
+eval "use t::lib::TestApp";
+plan skip_all => "t::lib::TestApp required for testing routes" if $@;
+plan skip_all => q~Can't locate object method "to_app" via package "t::lib::TestApp"~ if !t::lib::TestApp->can('to_app');
+
 my $app = t::lib::TestApp->to_app;
 is( ref $app, "CODE", "Got a code ref" );
 test_psgi $app, sub {
@@ -62,6 +63,3 @@ test_psgi $app, sub {
 done_testing();
 
 __END__
-
-
-
