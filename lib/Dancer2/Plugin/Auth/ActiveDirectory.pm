@@ -113,6 +113,9 @@ Configuration:
           definedright2: ad-group
           definedright3: another-ad-group
           definedright4: another-ad-group
+        start_tls:
+          verify: require
+
 
 Code:
 
